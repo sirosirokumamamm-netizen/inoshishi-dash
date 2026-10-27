@@ -1,0 +1,4 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {cluster,collapse,canPlay,points,adjacent} from '../src/arcade.js';
+test('cluster connects matching colors diagonally but never wraps rows',()=>{const b=Array.from({length:56},(_,i)=>({color:i}));b[0].color=b[8].color=b[16].color=99;assert.deepEqual(cluster(b,0).sort((a,b)=>a-b),[0,8,16]);assert.equal(adjacent(6,7),false);});
+test('collapse retains survivor order and refills every vacancy',()=>{const b=Array.from({length:56},(_,i)=>({color:i}));b[49]=null;const c=collapse(b,()=>({color:-1}));assert.equal(c[49].color,42);assert.equal(c[0].color,-1);assert.equal(c.filter(Boolean).length,56);});
+test('large clears, combos and fever reward more than small clears',()=>{assert.equal(points(3,1,false),300);assert.equal(points(3,1,true),900);assert.ok(points(7,2,false)>points(7,1,false));assert.ok(canPlay(Array.from({length:56},()=>({color:0}))));});

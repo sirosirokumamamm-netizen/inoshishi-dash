@@ -29,17 +29,12 @@ try {
   page.on('requestfailed',r=>errors.push(r.url()));
   page.on('response',r=>{if(r.status()>=400&&!r.url().endsWith('/favicon.ico'))errors.push(`${r.status()} ${r.url()}`);});
   await page.goto(`http://127.0.0.1:${server.address().port}${prefix}`);
-  await page.getByRole('button',{name:'プレイする'}).click();
+  await page.getByRole('button',{name:'あそぶ'}).click();
   await page.evaluate(()=>document.fonts.ready);
-  const r=await page.locator('#game').boundingBox();
-  await page.mouse.move(r.x+100/600*r.width,r.y+235/700*r.height);
-  await page.mouse.down();
-  await page.mouse.move(r.x+500/600*r.width,r.y+235/700*r.height,{steps:8});
-  await page.mouse.up();
-  assert.equal(await page.locator('#shots').textContent(),'04');
-  assert.equal(await page.locator('#cleared').textContent(),'33');
+  assert.equal(await page.locator('#overlay').isHidden(),true);
+  assert.equal(await page.locator('#score').textContent(),'0');
   assert.deepEqual(errors,[]);
-  console.log('GitHub Pages subpath: local assets, fonts and real slicing passed.');
+  console.log('GitHub Pages subpath: local assets, fonts and arcade startup passed.');
 } finally {
   if(browser)await browser.close();
   await new Promise(resolve=>server.close(resolve));
