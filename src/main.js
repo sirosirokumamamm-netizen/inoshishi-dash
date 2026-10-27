@@ -1,66 +1,48 @@
-import Matter from "matter-js";
-import { area, centroid, splitPolygon } from "./geometry.js";
+import { CollapseWorld, levels } from "./collapse.js";
 import "./style.css";
-const { Engine, Bodies, Body, Composite } = Matter,
-  $ = (s) => document.querySelector(s),
+const $ = (s) => document.querySelector(s),
   W = 600,
   H = 800;
-let best = 0;
+let records = {};
 try {
-  best = Number(localStorage.getItem("laser-flow-best")) || 0;
+  records = JSON.parse(localStorage.getItem("laser-collapse-v1")) || {};
 } catch {}
 $("#app").innerHTML =
-  `<header><a href="#">L<span>／</span>S</a><span>LASER SLICER <i>FLOW</i></span><button id="settings" aria-label="設定">調整</button></header><main><aside><span class="eyebrow">A DIFFERENT KIND OF FLOW</span><h1>光を引く。<br>世界が、<br><em>ほどける。</em></h1><p>指先が、刃になる。<br>形を見て、角度を決めて、切り抜く。<br>ひとつの軌跡から、次の軌跡へ。</p><div class="guide"><b>01 ／ なぞって切断</b><p>色に関係なく、自由な軌跡で。<br>大きな破片は、もう一度切る。</p><b>02 ／ 中心を狙う</b><p>小さな断片が光に変わる。<br>赤いリングは切らずに避ける。</p><b>03 ／ オーバードライブ</b><p>切断でチャージ。発動すると<br>8秒間、消去サイズと得点が2倍。</p></div></aside><section class="game"><div class="hud"><div><small>SCORE</small><strong id="score">0</strong></div><div class="time"><small>SECONDS</small><strong id="time">60</strong></div><button id="pause" aria-label="一時停止">Ⅱ</button></div><div class="field"><canvas id="game" width="600" height="800" aria-label="ドラッグで浮遊する図形を切断。赤いリングは避けてください。"></canvas><div class="field-top"><span id="wave">SEQUENCE 01</span><span id="combo">FIND YOUR ANGLE</span></div><div id="notice" aria-live="polite"></div><div id="overlay"></div><div class="field-bottom"><span id="goal">0 / 8 CLEARED</span><span id="status">SLICE TO BEGIN</span></div></div><div class="charge"><button id="pulse" disabled><span>◈</span><b>OVERDRIVE</b><small id="charge">0%</small></button><div><i id="chargebar"></i></div></div><div class="under"><span>BEST <b id="best">${best.toLocaleString()}</b></span><span>DRAG TO SLICE · ESC TO PAUSE</span></div></section><aside class="right"><div class="orbit">／</div><span class="eyebrow">CUT WITH INTENTION</span><h2>切り方が、<br>結果を変える。</h2><p>なぞっている間はスローモーション。<br>破片を見極め、次の切断につなぐ。</p><div class="rule"><b>PRECISION → REACTION</b><p>短い間隔で切断を続けると<br>コンボが加速。目標を達成して<br>次のシークエンスへ。</p></div><small>赤いリングへの接触：−3秒<br>切り残した物体の落下：−1秒<br>小さく消去した破片はペナルティなし</small></aside></main><footer>LASER SLICER / FLOW STUDY 03<span>HEADPHONES RECOMMENDED</span></footer><dialog id="dialog"><h2>プレイ設定</h2><label>サウンド<input id="sound" type="checkbox" checked></label><label>画面揺れ・粒子・振動<input id="effects" type="checkbox" checked></label><button id="close">もどる</button></dialog>`;
+  `<header><a href="#">L<span>／</span>S</a><span>LASER SLICER <i>CASCADE</i></span><button id="settings" aria-label="設定">調整</button></header><main><aside><span class="eyebrow">ONE CUT. EVERYTHING CHANGES.</span><h1>支えを切る。<br>崩れが、<br><em>答えになる。</em></h1><p>どちらを切り、どちらを残すか。<br>自分の一手が、落下の行き先を変える。</p><nav id="stages" aria-label="ステージ選択"></nav><div class="guide"><b>01 ／ 金色は切れる支え</b><p>切ると足場が傾く。両側を切れば落下。</p><b>02 ／ 緑の受け皿に運ぶ</b><p>結晶面積の80%を回収してクリア。<br>赤い範囲へ落とすと取り戻せない。</p><b>03 ／ 紫は共鳴コア</b><p>衝突と受け皿への落下で起動。<br>周囲を消去し、近くのコアへ連鎖する。</p></div></aside><section class="game"><div class="hud"><div><small>SCORE</small><strong id="score">0</strong></div><div class="time"><small>SHOTS LEFT</small><strong id="shots">3</strong></div><button id="pause" aria-label="一時停止">Ⅱ</button></div><div class="field"><canvas id="game" width="600" height="800" aria-label="ドラッグで切断線を狙い、離して発射。金色の支えを切って、結晶を緑の受け皿へ。"></canvas><div class="field-top"><span id="wave"></span><span id="combo">PLAN YOUR CUT</span></div><div id="notice" aria-live="polite"></div><div id="overlay"></div><div class="field-bottom"><span id="goal">0% / GOAL 80%</span><span id="status">PLAN YOUR CUT</span></div></div><div class="objective"><div><span>RECOVERED</span><b id="percent">0%</b></div><div class="recovery"><i id="recovered"></i><span></span></div><p id="hint"></p></div><div class="stage-controls"><button id="retry">↻ やり直す</button><button id="help">ルール</button><select id="level-select" aria-label="ステージ選択"><option value="0">01 ／ 支えを外す</option><option value="1">02 ／ 残す支点</option><option value="2">03 ／ 共鳴の連鎖</option></select></div><div class="under"><span>BEST <b id="best">—</b></span><span>AIM · RELEASE · WATCH IT UNFOLD</span></div></section><aside class="right"><div class="orbit">／</div><span class="eyebrow">CAUSE → COLLAPSE → CASCADE</span><h2>残した支点が、<br>落下を決める。</h2><p>照準中は時間を停止。<br>光るケーブルが切断対象。<br>足場が傾く方向を見極めよう。</p><div class="rule"><b>LESS CUTS, MORE CONSEQUENCE</b><p>残り1ショットにつき＋1,500点。<br>一度の崩壊で続けて回収すると<br>連鎖ボーナスが伸びる。</p></div><small>鋼の足場・紫のコアは切断できません。<br>結晶は小さく切って直接消去も可能。<br>空振りも1ショット消費します。</small></aside></main><footer>LASER SLICER / CASCADE<span>SET IT UP. LET IT FALL.</span></footer><dialog id="dialog"><h2>プレイ設定</h2><label>サウンド<input id="sound" type="checkbox" checked></label><label>画面揺れ・粒子・振動<input id="effects" type="checkbox" checked></label><button id="close">もどる</button></dialog>`;
 const canvas = $("canvas"),
-  ctx = canvas.getContext("2d"),
-  engine = Engine.create({ gravity: { x: 0, y: 0.28 } }),
-  palette = ["#baf1d5", "#b5cfff", "#dcc5f3", "#f4ceac"];
-let pieces = [],
-  debris = [],
-  sparks = [],
-  trails = [],
-  scars = [],
+  ctx = canvas.getContext("2d");
+let world = new CollapseWorld(),
+  index = 0,
   state = "title",
-  score = 0,
-  time = 60,
-  combo = 0,
-  comboClock = 0,
-  gauge = 0,
-  overdrive = 0,
-  wave = 1,
-  clears = 0,
-  total = 0,
-  maxCombo = 0,
-  spawnClock = 0,
-  last = 0,
-  clock = 0,
-  stroke = 0,
   drag = null,
+  last = 0,
+  sparks = [],
+  fragments = [],
+  beams = [],
+  rings = [],
   shake = 0,
-  audio,
-  uid = 0;
-const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-$("#effects").checked = !reduced;
-function tone(n = 1, deep = false) {
+  audio;
+$("#effects").checked = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+function tone(n = 1, bass = false) {
   if (!$("#sound").checked) return;
   try {
     audio ||= new (window.AudioContext || window.webkitAudioContext)();
     audio.resume();
     const o = audio.createOscillator(),
-      g = audio.createGain();
+      g = audio.createGain(),
+      t = audio.currentTime;
     o.type = "sine";
-    const t = audio.currentTime;
     o.frequency.setValueAtTime(
-      deep ? 90 : 440 * Math.pow(1.07, Math.min(n, 12)),
+      bass ? 100 : 420 * Math.pow(1.07, Math.min(n, 12)),
       t,
     );
-    o.frequency.exponentialRampToValueAtTime(deep ? 35 : 190, t + 0.18);
-    g.gain.setValueAtTime(0.06, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.24);
+    o.frequency.exponentialRampToValueAtTime(bass ? 35 : 200, t + 0.2);
+    g.gain.setValueAtTime(0.055, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
     o.connect(g);
     g.connect(audio.destination);
     o.start();
-    o.stop(t + 0.25);
+    o.stop(t + 0.26);
   } catch {}
 }
 function notify(a, b = "") {
@@ -70,261 +52,152 @@ function notify(a, b = "") {
   void el.offsetWidth;
   el.classList.add("visible");
 }
-function make(
-  vs,
-  color,
-  original,
-  depth = 0,
-  lastStroke = -1,
-  vel = { x: 0, y: 0 },
-  hazard = false,
-) {
-  const c = centroid(vs),
-    b = Bodies.fromVertices(
-      c.x,
-      c.y,
-      [vs],
-      { frictionAir: 0.012, restitution: 0.3 },
-      false,
-      0,
-      0,
-      0,
-    );
-  if (!b) return;
-  b.flow = {
-    color,
-    original: original || area(vs),
-    depth,
-    lastStroke,
-    hazard,
-    id: uid++,
-    age: 0,
-  };
-  Body.setVelocity(b, vel);
-  Body.setAngularVelocity(b, (Math.random() - 0.5) * 0.018);
-  Composite.add(engine.world, b);
-  pieces.push(b);
-  return b;
-}
-function launch(initial = false) {
-  const count = initial ? 8 : Math.min(5, 3 + Math.floor(wave / 3));
-  for (let i = 0; i < count; i++) {
-    if (pieces.length >= 40) break;
-    const x = initial ? 125 + (i % 3) * 170 : 100 + Math.random() * 400,
-      y = initial ? 210 + Math.floor(i / 3) * 185 : 850 + i * 65,
-      r = initial ? 53 : 44 + Math.random() * 18,
-      n = (i + wave) % 3 === 0 ? 6 : 4;
-    const vs = Array.from({ length: n }, (_, j) => {
-      const a = (j / n) * Math.PI * 2 + (n === 4 ? Math.PI / 4 : 0);
-      return { x: x + Math.cos(a) * r, y: y + Math.sin(a) * r };
-    });
-    const b = make(vs, palette[(i + wave) % 4], null, 0, -1, {
-      x: initial ? 0 : (300 - x) * 0.007,
-      y: initial ? -1 : -11 - Math.random() * 2,
-    });
-    if (b && initial) {
-      Body.setStatic(b, true);
-      b.flow.wait = true;
-    }
-  }
-  if (wave >= 2 && !initial && pieces.length < 39) {
-    const x = 140 + Math.random() * 320,
-      y = 900,
-      r = 26;
-    make(
-      Array.from({ length: 8 }, (_, i) => ({
-        x: x + Math.cos((i / 8) * Math.PI * 2) * r,
-        y: y + Math.sin((i / 8) * Math.PI * 2) * r,
-      })),
-      "#e7888b",
-      null,
-      0,
-      -1,
-      { x: (300 - x) * 0.005, y: -12 },
-      true,
-    );
-  }
-}
 function sync() {
-  $("#score").textContent = score.toLocaleString();
-  $("#time").textContent = Math.ceil(time);
-  $("#wave").textContent = `SEQUENCE ${String(wave).padStart(2, "0")}`;
+  const percent = Math.min(100, world.ratio * 100);
+  $("#score").textContent = world.score.toLocaleString();
+  $("#shots").textContent = world.shots;
+  $("#level-select").value = String(index);
+  $("#wave").textContent =
+    `${String(index + 1).padStart(2, "0")} / ${world.level.name}`;
+  $("#goal").textContent = `${percent.toFixed(0)}% / GOAL 80%`;
+  $("#percent").textContent = percent.toFixed(0) + "%";
+  $("#recovered").style.width = percent + "%";
   $("#combo").textContent =
-    combo > 1 ? `${combo} CUT COMBO` : "FIND YOUR ANGLE";
-  $("#goal").textContent = `${clears} / ${8 + wave * 2} CLEARED`;
-  $("#status").textContent =
-    overdrive > 0
-      ? "OVERDRIVE · " + Math.ceil(overdrive) + "s"
-      : drag
-        ? "FOCUS ACTIVE"
-        : "FREEFORM CUTTING";
-  $("#charge").textContent =
-    overdrive > 0 ? Math.ceil(overdrive) + "s" : Math.floor(gauge) + "%";
-  $("#chargebar").style.width =
-    (overdrive > 0 ? (overdrive / 8) * 100 : gauge) + "%";
-  $("#pulse").disabled = gauge < 100 || state !== "playing" || overdrive > 0;
-  $(".game").classList.toggle("active", overdrive > 0);
-  $(".time").classList.toggle("danger", time < 10);
+    world.chainTimer > 0 && world.chain > 1
+      ? `${world.chain} CHAIN`
+      : "PLAN YOUR CUT";
+  $("#status").textContent = world.settling
+    ? "COLLAPSE IN MOTION"
+    : drag
+      ? "RELEASE TO CUT"
+      : "PLAN YOUR CUT";
+  $("#hint").textContent = world.level.hint;
+  $("#best").textContent = records[index]?.score?.toLocaleString() || "—";
+  $("#shots").classList.toggle("danger", world.shots === 1);
+  $("#stages").innerHTML = levels
+    .map(
+      (l, i) =>
+        `<button data-stage="${i}" class="${i === index ? "selected" : ""}"><span>0${i + 1}</span>${l.name}<small>${records[i] ? "★".repeat(records[i].stars) : "→"}</small></button>`,
+    )
+    .join("");
+  document
+    .querySelectorAll("[data-stage]")
+    .forEach((b) => (b.onclick = () => load(Number(b.dataset.stage))));
 }
 function overlay() {
   const o = $("#overlay");
   o.hidden = state === "playing";
   if (state === "title")
-    o.innerHTML = `<span class="eyebrow">FREEFORM PHYSICS / 60 SECONDS</span><div class="title-mark">／</div><h2>Find your<br><em>flow.</em></h2><p>なぞった軌跡が、レーザーになる。<br>切って、分けて、小さな破片を光に。</p><button id="start">はじめる <span>↗</span></button><small>色合わせ不要 ／ マウス・タッチ対応</small>`;
+    o.innerHTML = `<span class="eyebrow">A PUZZLE OF CONSEQUENCES</span><div class="title-mark">／</div><h2>One cut.<br><em>A cascade.</em></h2><p>支えを切って、構造を崩す。<br>結晶の80%を、緑の受け皿へ。</p><button id="start">はじめる <span>↗</span></button><small>直線をドラッグして、離すと発射</small>`;
   if (state === "paused")
-    o.innerHTML = `<span class="eyebrow">PAUSED</span><h2>ひと呼吸。</h2><p>時間と物理演算は止まっています。</p><button id="resume">つづける ↗</button><button id="restart" class="secondary">もう一度</button>`;
-  if (state === "result")
-    o.innerHTML = `<span class="eyebrow">SESSION COMPLETE</span><h2>${score.toLocaleString()}</h2><p>消去 ${total}　／　最大コンボ ${maxCombo}<br>到達 SEQUENCE ${String(wave).padStart(2, "0")}</p><button id="start">もう一度、切る ↗</button>`;
-  $("#start")?.addEventListener("click", start);
+    o.innerHTML = `<span class="eyebrow">PAUSED</span><h2>次の一手を。</h2><p>物理演算は停止しています。</p><button id="resume">つづける ↗</button><button id="restart" class="secondary">最初から</button>`;
+  if (state === "won" || state === "lost") {
+    const won = state === "won";
+    const stars =
+      world.ratio >= 0.95 && world.shots >= 1 ? 3 : world.shots >= 1 ? 2 : 1;
+    o.innerHTML = `<span class="eyebrow">${won ? "STRUCTURE SOLVED" : "RETHINK THE SUPPORT"}</span><div class="result-stars">${won ? "★".repeat(stars) + "☆".repeat(3 - stars) : "↻"}</div><h2>${won ? "It unfolds." : "別の切り方を。"}</h2><p>回収 ${(world.ratio * 100).toFixed(1)}% ／ ${world.score.toLocaleString()}点<br>${won ? `残り${world.shots}ショット · 効率ボーナス＋${world.shots * 1500}` : world.lostArea > 0 ? "赤い範囲に落とした分は回収できません。" : "支えの位置と、受け皿の場所を見直そう。"}</p><button id="next">${won ? (index === levels.length - 1 ? "もう一周、より少なく" : "次の構造へ") : "もう一度"} ↗</button>${won ? '<button id="restart" class="secondary">この構造をもう一度</button>' : ""}`;
+  }
+  $("#start")?.addEventListener("click", () => {
+    state = "playing";
+    tone(3);
+    overlay();
+  });
   $("#resume")?.addEventListener("click", () => {
     state = "playing";
     overlay();
   });
-  $("#restart")?.addEventListener("click", start);
+  $("#restart")?.addEventListener("click", () => load(index));
+  $("#next")?.addEventListener("click", () =>
+    load(state === "won" ? (index + 1) % levels.length : index),
+  );
 }
-function start() {
-  Composite.clear(engine.world, false);
-  Engine.clear(engine);
-  pieces = [];
-  debris = [];
-  sparks = [];
-  trails = [];
-  scars = [];
-  score = 0;
-  time = 60;
-  combo = 0;
-  gauge = 0;
-  overdrive = 0;
-  wave = 1;
-  clears = 0;
-  total = 0;
-  maxCombo = 0;
-  spawnClock = 0;
-  drag = null;
+$("#level-select").onchange = (e) => load(Number(e.target.value));
+function load(i) {
+  index = i;
+  world = new CollapseWorld(i);
   state = "playing";
-  launch(true);
-  tone(3);
-  overlay();
+  drag = null;
+  sparks = [];
+  fragments = [];
+  beams = [];
+  rings = [];
+  $("#notice").classList.remove("visible");
   sync();
+  overlay();
 }
-function burst(vs, color) {
-  const c = centroid(vs);
-  if ($("#effects").checked)
-    for (let i = 0; i < 18; i++) {
-      const a = Math.random() * Math.PI * 2,
-        s = 35 + Math.random() * 170;
-      sparks.push({
-        x: c.x,
-        y: c.y,
-        vx: Math.cos(a) * s,
-        vy: Math.sin(a) * s,
-        life: 0.5 + Math.random() * 0.5,
-        color,
-      });
-    }
-  debris.push({
-    vs: vs.map((p) => ({ ...p })),
-    color,
-    life: 0.65,
-    vx: (c.x - 300) * 0.002,
-    vy: -1,
-    angle: 0,
-  });
-  if (sparks.length > 500) sparks.splice(0, sparks.length - 500);
-}
-function cut(a, b) {
-  if (Math.hypot(b.x - a.x, b.y - a.y) < 4) return;
-  trails.push({ a, b, life: 0.24 });
-  let hits = 0,
-    removed = 0;
-  for (const body of [...pieces]) {
-    const f = body.flow;
-    if (f.lastStroke === stroke) continue;
-    const minX = Math.min(a.x, b.x),
-      maxX = Math.max(a.x, b.x),
-      minY = Math.min(a.y, b.y),
-      maxY = Math.max(a.y, b.y);
-    if (
-      body.bounds.max.x < minX ||
-      body.bounds.min.x > maxX ||
-      body.bounds.max.y < minY ||
-      body.bounds.min.y > maxY
-    )
-      continue;
-    const parts = splitPolygon(body.vertices, a, b);
-    if (!parts) continue; // Segment must cross the body, rather than extending infinitely.
-    let intersects = 0;
-    for (let j = 0; j < body.vertices.length; j++) {
-      const p = body.vertices[j],
-        q = body.vertices[(j + 1) % body.vertices.length];
-      const dx = b.x - a.x,
-        dy = b.y - a.y,
-        ex = q.x - p.x,
-        ey = q.y - p.y,
-        den = dx * ey - dy * ex;
-      if (Math.abs(den) < 1e-8) continue;
-      const t = ((p.x - a.x) * ey - (p.y - a.y) * ex) / den,
-        u = ((p.x - a.x) * dy - (p.y - a.y) * dx) / den;
-      if (t >= 0 && t <= 1 && u >= 0 && u <= 1) intersects++;
-    }
-    if (!intersects) continue;
-    f.lastStroke = stroke;
-    if (f.hazard) {
-      time = Math.max(0, time - 3);
-      notify("INTERFERENCE", "−3秒 · 赤いリングを避けよう");
-      tone(1, true);
-      scars.push({ a, b, life: 0.5 });
-      continue;
-    }
-    if (f.depth >= 7 || pieces.length >= 47) continue;
-    hits++;
-    Composite.remove(engine.world, body);
-    pieces.splice(pieces.indexOf(body), 1);
-    const nx = -(b.y - a.y) / Math.hypot(b.x - a.x, b.y - a.y),
-      ny = (b.x - a.x) / Math.hypot(b.x - a.x, b.y - a.y);
-    parts.forEach((vs, i) => {
-      if (area(vs) <= f.original * (overdrive > 0 ? 0.64 : 0.32)) {
-        burst(vs, f.color);
-        removed++;
-      } else {
-        const child = make(vs, f.color, f.original, f.depth + 1, stroke, {
-          x: body.velocity.x + nx * (i ? -2 : 2),
-          y: Math.min(body.velocity.y, 1) + ny * (i ? -2 : 2) - 1.5,
-        });
-        if (child) child.flow.flash = 0.7;
-      }
-    });
-    scars.push({ a, b, life: 0.3 });
-  }
-  if (hits) {
-    combo = comboClock > 0 ? combo + hits : hits;
-    comboClock = 2.2;
-    maxCombo = Math.max(maxCombo, combo);
-    score += Math.round(
-      (hits * 40 + removed * 160) *
-        (1 + Math.min(combo, 20) * 0.1) *
-        (overdrive > 0 ? 2 : 1),
-    );
-    gauge = Math.min(100, gauge + hits * 9 + removed * 3);
-    clears += removed;
-    total += removed;
-    shake = $("#effects").checked ? Math.min(5, hits + removed) : 0;
-    tone(combo);
-    if (removed >= 2 || combo >= 4)
-      notify(
-        removed >= 4 ? "Beautiful cut." : `${combo} cuts in flow`,
-        removed ? `${removed} fragments released` : "切り口から、次の一手へ",
+function handleEvents() {
+  for (const e of world.drain()) {
+    if (e.vertices) {
+      const c = e.vertices.reduce(
+        (s, p) => ({
+          x: s.x + p.x / e.vertices.length,
+          y: s.y + p.y / e.vertices.length,
+        }),
+        { x: 0, y: 0 },
       );
-    if (clears >= 8 + wave * 2) {
-      clears = 0;
-      wave++;
-      time = Math.min(65, time + 3);
-      notify("Sequence complete.", "＋3秒 · 次の構成へ");
-      launch();
+      fragments.push({ vs: e.vertices, color: e.color, life: 0.6, vy: -0.8 });
+      if ($("#effects").checked)
+        for (let i = 0; i < 14; i++) {
+          const a = Math.random() * Math.PI * 2,
+            v = 35 + Math.random() * 160;
+          sparks.push({
+            x: c.x,
+            y: c.y,
+            vx: Math.cos(a) * v,
+            vy: Math.sin(a) * v,
+            color: e.color,
+            life: 0.4 + Math.random() * 0.45,
+          });
+        }
+      if (e.type !== "lost") {
+        tone(e.chain);
+        if (e.chain >= 3)
+          notify(`${e.chain} in cascade.`, `＋${e.gain} · 崩れが次の回収へ`);
+      }
     }
-    if (navigator.vibrate && $("#effects").checked) navigator.vibrate(8);
-    sync();
+    if (e.type === "blast") {
+      rings.push({ ...e.center, life: 0.8, radius: e.radius });
+      tone(1, true);
+      shake = $("#effects").checked ? 7 : 0;
+      notify("Resonance.", "衝突から、周囲へ連鎖");
+    }
+    if (e.type === "cable") {
+      rings.push({
+        x: (e.a.x + e.b.x) / 2,
+        y: (e.a.y + e.b.y) / 2,
+        life: 0.35,
+        radius: 40,
+      });
+      tone(2);
+    }
+    if (e.type === "shot") {
+      beams.push({ a: e.a, b: e.b, life: 0.35 });
+      if (!e.cuts) notify("空振り。", "切断線を金色のケーブルへ");
+      if ($("#effects").checked && navigator.vibrate) navigator.vibrate(10);
+    }
+    if (e.type === "win") {
+      state = "won";
+      const stars =
+        world.ratio >= 0.95 && world.shots >= 1 ? 3 : world.shots >= 1 ? 2 : 1;
+      records[index] = {
+        score: Math.max(records[index]?.score || 0, world.score),
+        stars: Math.max(records[index]?.stars || 0, stars),
+      };
+      try {
+        localStorage.setItem("laser-collapse-v1", JSON.stringify(records));
+      } catch {}
+      tone(9);
+      sync();
+      overlay();
+    }
+    if (e.type === "fail") {
+      state = "lost";
+      tone(1, true);
+      sync();
+      overlay();
+    }
   }
+  if (sparks.length > 500) sparks.splice(0, sparks.length - 500);
 }
 function point(e) {
   const r = canvas.getBoundingClientRect();
@@ -335,27 +208,24 @@ function point(e) {
 }
 canvas.onpointerdown = (e) => {
   if (state !== "playing" || drag || e.button !== 0) return;
-  stroke++;
-  drag = { id: e.pointerId, p: point(e), start: point(e), dist: 0 };
+  if (world.settling) {
+    notify("崩れの行方を見よう。", "動きが落ち着くと次の一手へ");
+    return;
+  }
+  drag = { id: e.pointerId, a: point(e), b: point(e) };
   canvas.setPointerCapture(e.pointerId);
 };
 canvas.onpointermove = (e) => {
-  if (drag?.id !== e.pointerId) return;
-  const events = e.getCoalescedEvents?.() || [e];
-  for (const ev of events.length ? events : [e]) {
-    const p = point(ev);
-    drag.dist += Math.hypot(p.x - drag.p.x, p.y - drag.p.y);
-    cut(drag.p, p);
-    drag.p = p;
-  }
+  if (drag?.id === e.pointerId) drag.b = point(e);
 };
 canvas.onpointerup = (e) => {
   if (drag?.id !== e.pointerId) return;
-  const p = point(e);
-  cut(drag.p, p);
-  if (drag.dist < 10)
-    notify("光を、引いてみよう。", "物体を横切るようにドラッグ");
+  const { a } = drag,
+    b = point(e);
   drag = null;
+  world.fire(a, b);
+  handleEvents();
+  sync();
 };
 canvas.onpointercancel = canvas.onlostpointercapture = () => (drag = null);
 function pause() {
@@ -364,28 +234,35 @@ function pause() {
     drag = null;
   } else if (state === "paused") state = "playing";
   overlay();
-  sync();
 }
 $("#pause").onclick = pause;
+$("#retry").onclick = () => {
+  if (state === "playing") {
+    pause();
+    $("#overlay").insertAdjacentHTML(
+      "beforeend",
+      "<small>最初からのボタンで現在のプレイをリセットします。</small>",
+    );
+  } else load(index);
+};
+$("#settings").onclick = () => {
+  if (state === "playing") pause();
+  $("#dialog").showModal();
+};
+$("#close").onclick = () => $("#dialog").close();
+$("#help").onclick = () => {
+  if (state === "playing") pause();
+  $("#overlay").innerHTML =
+    `<h2>支えを、読む。</h2><p>金色のケーブルは足場とつながっています。<br>片側を切ると、切った側へ足場が傾きます。<br>両側を切ると、そのまま落下します。<br><br>照準中に光るケーブルが切断対象です。<br>緑の受け皿で80%の面積を回収するとクリア。<br>赤い範囲へ落とした結晶は失われます。<br><br>結晶自体を小さく切って直接消すこともできます。<br>鋼の足場と紫コアは切断不可。紫コアは<br>衝突や回収で起動し、周囲へ共鳴が伝わります。</p><button id="back">もどる</button>`;
+  $("#overlay").hidden = false;
+  $("#back").onclick = overlay;
+};
 document.onkeydown = (e) => {
   if (e.key === "Escape" && !$("#dialog").open) pause();
 };
 document.addEventListener("visibilitychange", () => {
   if (document.hidden && state === "playing") pause();
 });
-$("#settings").onclick = () => {
-  if (state === "playing") pause();
-  $("#dialog").showModal();
-};
-$("#close").onclick = () => $("#dialog").close();
-$("#pulse").onclick = () => {
-  if (state !== "playing" || gauge < 100) return;
-  gauge = 0;
-  overdrive = 8;
-  notify("Overdrive.", "8秒間、消去閾値と得点が2倍");
-  tone(8);
-  sync();
-};
 function path(v) {
   ctx.beginPath();
   v.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
@@ -396,10 +273,10 @@ function draw(dt) {
   ctx.save();
   if (shake > 0) {
     ctx.translate((Math.random() - 0.5) * shake, (Math.random() - 0.5) * shake);
-    if (dt) shake *= 0.84;
+    if (dt) shake *= 0.86;
   }
   const bg = ctx.createRadialGradient(300, 350, 0, 300, 350, 560);
-  bg.addColorStop(0, overdrive > 0 ? "#24382e" : "#212c32");
+  bg.addColorStop(0, "#212e31");
   bg.addColorStop(1, "#10191f");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
@@ -410,155 +287,233 @@ function draw(dt) {
       ctx.arc(x, y, 0.8, 0, 7);
       ctx.fill();
     }
-  for (const b of pieces) {
-    const f = b.flow;
-    if (f.hazard) {
-      ctx.strokeStyle = "#ef9f9c";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(b.position.x, b.position.y, 24, 0, 7);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(b.position.x - 8, b.position.y - 8);
-      ctx.lineTo(b.position.x + 8, b.position.y + 8);
-      ctx.moveTo(b.position.x + 8, b.position.y - 8);
-      ctx.lineTo(b.position.x - 8, b.position.y + 8);
-      ctx.stroke();
-      continue;
-    }
+  const [left, right] = world.level.zone;
+  ctx.fillStyle = "#baf1d515";
+  ctx.fillRect(left, 700, right - left, 45);
+  ctx.strokeStyle = "#c0edd3";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(left, 700);
+  ctx.lineTo(left, 741);
+  ctx.lineTo(right, 741);
+  ctx.lineTo(right, 700);
+  ctx.stroke();
+  ctx.setLineDash([4, 7]);
+  ctx.strokeStyle = "#d5948755";
+  ctx.beginPath();
+  ctx.moveTo(25, 735);
+  ctx.lineTo(left - 5, 735);
+  ctx.moveTo(right + 5, 735);
+  ctx.lineTo(575, 735);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.font = "10px system-ui";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#abd3bc";
+  ctx.fillText("RECEIVER · 80% TO CLEAR", (left + right) / 2, 768);
+  if (left > 80) {
+    ctx.fillStyle = "#d59487";
+    ctx.fillText("LOST", left / 2, 755);
+  }
+  if (right < 500) {
+    ctx.fillStyle = "#d59487";
+    ctx.fillText("LOST", (600 + right) / 2, 755);
+  }
+  const selected = drag ? world.preview(drag.a, drag.b) : [];
+  for (const cable of world.cables) {
+    ctx.fillStyle = "#6b8077";
+    ctx.beginPath();
+    ctx.arc(cable.anchor.x, cable.anchor.y, 5, 0, 7);
+    ctx.fill();
+    if (cable.cut) continue;
+    const end = world.cableEnd(cable),
+      hit = selected.includes(cable);
+    ctx.strokeStyle = hit ? "#fff8ce" : "#e8c994";
+    ctx.lineWidth = hit ? 4 : 2;
+    ctx.shadowColor = "#f4cf96";
+    ctx.shadowBlur = hit ? 18 : 0;
+    ctx.beginPath();
+    ctx.moveTo(cable.anchor.x, cable.anchor.y);
+    ctx.lineTo(end.x, end.y);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#e8c994";
+    ctx.beginPath();
+    ctx.arc(end.x, end.y, 4, 0, 7);
+    ctx.fill();
+  }
+  for (const b of world.platforms) {
+    path(b.vertices);
+    ctx.fillStyle = "#657a80";
+    ctx.fill();
+    ctx.strokeStyle = "#bdc9cb";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.save();
+    ctx.translate(b.position.x, b.position.y);
+    ctx.rotate(b.angle);
+    ctx.fillStyle = "#25363a";
+    ctx.font = "8px system-ui";
+    ctx.fillText("STEEL · 支えを切る", 0, 3);
+    ctx.restore();
+  }
+  for (const b of world.targets) {
     ctx.save();
     path(b.vertices);
     const g = ctx.createLinearGradient(
-      b.position.x - 45,
-      b.position.y - 45,
-      b.position.x + 45,
-      b.position.y + 45,
+      b.position.x - 25,
+      b.position.y - 25,
+      b.position.x + 25,
+      b.position.y + 25,
     );
-    g.addColorStop(0, f.color + "ee");
-    g.addColorStop(1, f.color + "65");
-    ctx.shadowColor = f.color + "50";
-    ctx.shadowBlur = 22;
+    g.addColorStop(0, b.color + "ee");
+    g.addColorStop(1, b.color + "66");
+    ctx.shadowColor = b.color + "44";
+    ctx.shadowBlur = 14;
     ctx.fillStyle = g;
     ctx.fill();
     ctx.shadowBlur = 0;
-    ctx.strokeStyle = "#ffffffaa";
-    ctx.lineWidth = 1.2;
+    ctx.strokeStyle = "#ffffff99";
+    ctx.lineWidth = 1;
     ctx.stroke();
     ctx.clip();
-    ctx.fillStyle = "#ffffff15";
+    ctx.fillStyle = "#ffffff25";
     ctx.beginPath();
-    ctx.moveTo(b.position.x - 60, b.position.y - 80);
-    ctx.lineTo(b.position.x + 30, b.position.y - 80);
-    ctx.lineTo(b.position.x - 20, b.position.y + 80);
-    ctx.lineTo(b.position.x - 110, b.position.y + 80);
+    ctx.moveTo(b.position.x - 40, b.position.y - 40);
+    ctx.lineTo(b.position.x + 10, b.position.y - 40);
+    ctx.lineTo(b.position.x - 10, b.position.y + 40);
+    ctx.lineTo(b.position.x - 60, b.position.y + 40);
     ctx.fill();
     ctx.restore();
-    if (f.flash > 0) {
-      path(b.vertices);
-      ctx.strokeStyle = "#ffc3b0";
-      ctx.lineWidth = 2;
+    if (b.role === "core") {
+      ctx.strokeStyle = "#ebd4ff";
+      ctx.lineWidth = 1.3;
+      ctx.beginPath();
+      ctx.arc(b.position.x, b.position.y, 11, 0, 7);
       ctx.stroke();
-      f.flash -= dt;
+      ctx.fillStyle = "#eddcff";
+      ctx.font = "14px system-ui";
+      ctx.fillText("✦", b.position.x, b.position.y + 5);
     }
   }
-  for (const d of debris) {
-    d.life -= dt;
-    d.vy += dt * 4;
-    d.vs.forEach((v) => {
-      v.x += d.vx * dt * 60;
-      v.y += d.vy * dt * 60;
-    });
-    ctx.globalAlpha = Math.max(0, d.life / 0.65);
-    path(d.vs);
-    ctx.fillStyle = d.color + "70";
+  if (drag) {
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = "#fff9d8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(drag.a.x, drag.a.y);
+    ctx.lineTo(drag.b.x, drag.b.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const p of [drag.a, drag.b]) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 8, 0, 7);
+      ctx.stroke();
+    }
+    ctx.fillStyle = "#f1dbaf";
+    ctx.font = "12px system-ui";
+    let msg = "ケーブルに線を重ねる";
+    if (selected.length) {
+      const per = new Map();
+      for (const c of selected) {
+        if (!per.has(c.platform)) per.set(c.platform, []);
+        per.get(c.platform).push(c);
+      }
+      msg = [...per.entries()]
+        .map(([p, cs]) => {
+          const remains = world.cables.filter(
+            (c) => c.platform === p && !c.cut && !cs.includes(c),
+          );
+          return remains.length === 0
+            ? "両側が外れる → 落下"
+            : cs[0].side < 0
+              ? "左支点が外れる → 左へ傾く"
+              : "右支点が外れる → 右へ傾く";
+        })
+        .join(" ／ ");
+    }
+    ctx.fillText(msg, 300, 65);
+  }
+  for (const f of fragments) {
+    f.life -= dt;
+    f.vy += dt * 3;
+    f.vs.forEach((p) => (p.y += f.vy * dt * 60));
+    ctx.globalAlpha = Math.max(0, f.life / 0.6);
+    path(f.vs);
+    ctx.fillStyle = f.color + "70";
     ctx.fill();
-    ctx.strokeStyle = d.color;
+    ctx.strokeStyle = f.color;
     ctx.stroke();
   }
-  debris = debris.filter((d) => d.life > 0);
+  fragments = fragments.filter((f) => f.life > 0);
   ctx.globalAlpha = 1;
   for (const p of sparks) {
     p.life -= dt;
     p.x += p.vx * dt;
     p.y += p.vy * dt;
-    p.vy += 70 * dt;
+    p.vy += 80 * dt;
     ctx.globalAlpha = Math.max(0, p.life);
     ctx.fillStyle = p.color;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, 1.6, 0, 7);
+    ctx.arc(p.x, p.y, 1.8, 0, 7);
     ctx.fill();
   }
   sparks = sparks.filter((p) => p.life > 0);
   ctx.globalAlpha = 1;
-  for (const t of trails) {
-    t.life -= dt;
-    ctx.globalAlpha = Math.max(0, t.life / 0.24);
-    ctx.strokeStyle = overdrive > 0 ? "#c7f2ce" : "#f2eee4";
-    ctx.shadowColor = "#d4f5ff";
-    ctx.shadowBlur = 15;
-    ctx.lineWidth = 3;
-    ctx.lineCap = "round";
+  for (const r of rings) {
+    r.life -= dt;
+    ctx.globalAlpha = Math.max(0, r.life);
+    ctx.strokeStyle = "#e0c2ff";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(t.a.x, t.a.y);
-    ctx.lineTo(t.b.x, t.b.y);
+    ctx.arc(r.x, r.y, (1 - r.life) * r.radius, 0, 7);
     ctx.stroke();
   }
-  trails = trails.filter((t) => t.life > 0);
-  scars = scars.filter((s) => (s.life -= dt) > 0);
+  rings = rings.filter((r) => r.life > 0);
+  ctx.globalAlpha = 1;
+  for (const b of beams) {
+    b.life -= dt;
+    ctx.globalAlpha = Math.max(0, b.life / 0.35);
+    ctx.strokeStyle = "#fff1d5";
+    ctx.shadowColor = "#f2d7af";
+    ctx.shadowBlur = 18;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(b.a.x, b.a.y);
+    ctx.lineTo(b.b.x, b.b.y);
+    ctx.stroke();
+  }
+  beams = beams.filter((b) => b.life > 0);
   ctx.shadowBlur = 0;
   ctx.globalAlpha = 1;
-  if (drag) {
-    ctx.strokeStyle = "#ffffff77";
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.arc(drag.p.x, drag.p.y, 18, 0, 7);
-    ctx.stroke();
-  }
   ctx.restore();
 }
-function frame(t) {
-  const real = Math.min((t - last) / 1000 || 0, 0.05);
-  last = t;
-  let dt = 0;
-  if (state === "playing") {
-    time = Math.max(0, time - real);
-    clock += real;
-    comboClock = Math.max(0, comboClock - real);
-    if (!comboClock) combo = 0;
-    overdrive = Math.max(0, overdrive - real);
-    dt = real * (drag ? 0.18 : overdrive > 0 ? 0.7 : 1);
-    Engine.update(engine, dt * 1000);
-    spawnClock += real;
-    for (const b of [...pieces]) {
-      b.flow.age += dt;
-      if (b.position.y > 960 || b.position.x < -150 || b.position.x > 750) {
-        Composite.remove(engine.world, b);
-        pieces.splice(pieces.indexOf(b), 1);
-        if (!b.flow.hazard) {
-          time = Math.max(0, time - 1);
-          notify("Lost fragment", "−1秒");
-        }
-      }
-    }
-    if (spawnClock > 3.7 || pieces.length < 3) {
-      spawnClock = 0;
-      launch();
-    }
-    if (time <= 0) {
-      state = "result";
-      drag = null;
-      best = Math.max(best, score);
-      try {
-        localStorage.setItem("laser-flow-best", String(best));
-      } catch {}
-      $("#best").textContent = best.toLocaleString();
-      overlay();
-    }
-    sync();
+function frame(now) {
+  const dt = Math.min((now - last) / 1000 || 0, 0.05);
+  last = now;
+  if (state === "playing" && !drag && !$("#dialog").open) {
+    world.step(dt);
+    handleEvents();
   }
-  draw(dt);
+  draw(state === "playing" ? dt : 0);
+  if (state === "playing") {
+    // Update metrics without replacing stage buttons every animation frame.
+    $("#score").textContent = world.score.toLocaleString();
+    $("#goal").textContent = `${(world.ratio * 100).toFixed(0)}% / GOAL 80%`;
+    $("#percent").textContent = (world.ratio * 100).toFixed(0) + "%";
+    $("#recovered").style.width = world.ratio * 100 + "%";
+    $("#combo").textContent =
+      world.chainTimer > 0 && world.chain > 1
+        ? `${world.chain} CHAIN`
+        : "PLAN YOUR CUT";
+    $("#status").textContent = world.settling
+      ? "COLLAPSE IN MOTION"
+      : drag
+        ? "RELEASE TO CUT"
+        : "PLAN YOUR CUT";
+  }
   requestAnimationFrame(frame);
 }
-overlay();
 sync();
+overlay();
 requestAnimationFrame(frame);

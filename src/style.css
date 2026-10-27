@@ -512,3 +512,147 @@ dialog button {
     scroll-behavior: auto;
   }
 }
+#stages {
+  display: grid;
+  gap: 8px;
+  margin-top: 26px;
+}
+#stages button {
+  background: none;
+  border: 1px solid #baf1d522;
+  color: #98afa2;
+  border-radius: 8px;
+  padding: 13px 11px;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  font-size: 11px;
+}
+#stages button.selected {
+  background: #baf1d510;
+  border-color: #baf1d577;
+  color: #e3efdf;
+}
+#stages span {
+  font-size: 9px;
+  color: #dbbd85;
+}
+#stages small {
+  margin-left: auto;
+  color: #dbc68c;
+  font-size: 9px;
+}
+.objective {
+  margin-top: 19px;
+}
+.objective > div:first-child {
+  display: flex;
+  justify-content: space-between;
+  font-size: 8px;
+  letter-spacing: 1.5px;
+  color: #9ab3a6;
+}
+.objective b {
+  font-size: 12px;
+  font-weight: 400;
+  color: #baf1d5;
+}
+.recovery {
+  height: 4px;
+  border-radius: 3px;
+  background: #baf1d518;
+  position: relative;
+  margin: 12px 0;
+}
+.recovery i {
+  display: block;
+  height: 100%;
+  background: #baf1d5;
+  transition: width 0.2s;
+}
+.recovery span {
+  position: absolute;
+  left: 80%;
+  top: -3px;
+  height: 10px;
+  width: 1px;
+  background: #e0cb99;
+}
+.objective p {
+  font-size: 10px;
+  line-height: 1.9;
+  color: #b0c8b9;
+  min-height: 38px;
+  margin: 0;
+}
+.stage-controls {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.stage-controls button {
+  border: 1px solid #baf1d533;
+  border-radius: 20px;
+  background: none;
+  color: #a7c4b2;
+  padding: 9px 15px;
+  font-size: 10px;
+}
+.result-stars {
+  color: #e8c994;
+  letter-spacing: 7px;
+  font-size: 26px;
+  margin-top: 20px;
+}
+#overlay h2 {
+  font-size: 45px;
+}
+#overlay h2 + p {
+  font-size: 10px;
+}
+.guide {
+  margin-top: 24px;
+}
+#shots.danger {
+  color: #edba9f;
+}
+@media (max-width: 650px) {
+  .objective {
+    margin-top: 15px;
+  }
+  .objective p {
+    min-height: 30px;
+    font-size: 10px;
+  }
+  .stage-controls {
+    margin-top: 6px;
+  }
+  #overlay h2 {
+    font-size: 38px;
+  }
+  .title-mark {
+    font-size: 55px;
+  }
+  .under {
+    font-size: 6px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .recovery i {
+    transition: none;
+  }
+}
+.stage-controls select {
+  margin-left: auto;
+  max-width: 45%;
+  background: #14201e;
+  color: #b4cbbd;
+  border: 1px solid #baf1d533;
+  border-radius: 20px;
+  padding: 8px;
+  font: 10px system-ui;
+}
+.stage-controls select:focus-visible {
+  outline: 2px solid #baf1d5;
+}

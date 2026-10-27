@@ -64,7 +64,7 @@ try {
   assert.equal(await page.locator("#score").textContent(), "0");
   assert.deepEqual(errors, []);
   console.log(
-    "GitHub Pages subpath: local assets, fonts and arcade startup passed.",
+    "GitHub Pages subpath: local assets, fonts and puzzle startup passed.",
   );
 } finally {
   if (browser) await browser.close();
