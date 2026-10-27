@@ -41,11 +41,56 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       pages: write
+      actions: read
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      # Legacy branch publishing can coexist with this workflow and overwrite dist.
+      # This token cannot change repository Pages settings; deploy dist last.
+      - name: Wait for automatic branch publishing to finish
+        uses: actions/github-script@v7
+        with:
+          script: |
+            for (let attempt = 0; attempt < 60; attempt++) {
+              const {data} = await github.rest.actions.listWorkflowRunsForRepo({
+                ...context.repo, head_sha: context.sha, per_page: 100
+              });
+              const legacy = data.workflow_runs.filter(run =>
+                run.path === 'dynamic/pages/pages-build-deployment');
+              if (legacy.every(run => run.status === 'completed')) {
+                core.info(`Branch publishers finished (${legacy.length}); publishing dist.`);
+                return;
+              }
+              core.info('Waiting for branch publisher to prevent a source-file overwrite.');
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            throw new Error('Branch publishing did not finish; refusing a competing deployment.');
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Verify published HTML and JavaScript
+        uses: actions/github-script@v7
+        env:
+          SITE_URL: ${{ steps.deployment.outputs.page_url }}
+        with:
+          script: |
+            const site = process.env.SITE_URL;
+            for (let attempt = 0; attempt < 12; attempt++) {
+              const response = await fetch(`${site}?build=${context.sha}&check=${attempt}`, {
+                headers: {'Cache-Control': 'no-cache'}
+              });
+              const html = await response.text();
+              const match = html.match(/<script[^>]*src="([^"]+)"/);
+              if (response.ok && match && !match[1].includes('/src/')) {
+                const asset = await fetch(new URL(match[1], site));
+                if (asset.ok && (asset.headers.get('content-type') || '').includes('javascript')) {
+                  core.info('Published bundled HTML and JavaScript verified.');
+                  return;
+                }
+              }
+              await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+            throw new Error('Public site is not serving the built game.');
